@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gaze Tracking Experiment</title>
+    <link rel="stylesheet" href="css/main.css">
+    <link rel="stylesheet" href="css/calibration.css">
+    <link rel="stylesheet" href="css/experiment.css">
+</head>
+<body>
+    <!-- Welcome Screen -->
+    <div id="welcome-screen" class="screen">
+        <div class="container">
+            <h1>Gaze Tracking Experiment</h1>
+            <p>Thank you for participating in this research study.</p>
+            <p>This experiment will take approximately 10-15 minutes.</p>
+
+            <div class="info-box">
+                <h3>What you'll do:</h3>
+                <ul>
+                    <li>Allow camera access for eye tracking</li>
+                    <li>Complete a brief calibration (1-2 minutes)</li>
+                    <li>View pairs of images while we track your gaze</li>
+                    <li>That's it!</li>
+                </ul>
+            </div>
+
+            <div class="info-box">
+                <h3>Requirements:</h3>
+                <ul>
+                    <li>Desktop or laptop computer (no mobile devices)</li>
+                    <li>Webcam</li>
+                    <li>Good lighting</li>
+                    <li>Sit approximately 60cm (2 feet) from screen</li>
+                </ul>
+            </div>
+
+            <div class="consent">
+                <label>
+                    <input type="checkbox" id="consent-checkbox">
+                    I consent to participate in this study
+                </label>
+            </div>
+
+            <button id="begin-btn" class="btn btn-primary" disabled>Begin Experiment</button>
+        </div>
+    </div>
+
+    <!-- Camera Setup Screen -->
+    <div id="camera-screen" class="screen hidden">
+        <div class="container">
+            <h2>Camera Setup</h2>
+            <p>Please allow camera access when prompted.</p>
+
+            <div class="video-container">
+                <video id="webcam-preview" autoplay playsinline></video>
+                <div id="face-detection-indicator" class="indicator"></div>
+            </div>
+
+            <div id="camera-status" class="status">
+                Initializing camera...
+            </div>
+
+            <button id="camera-ready-btn" class="btn btn-primary hidden">Camera Ready - Continue</button>
+        </div>
+    </div>
+
+    <!-- Calibration Instructions Screen -->
+    <div id="calibration-instructions-screen" class="screen hidden">
+        <div class="container">
+            <h2>Calibration Instructions</h2>
+            <div class="info-box">
+                <h3>What is calibration?</h3>
+                <p>We need to calibrate the eye tracker to understand where you're looking on the screen.</p>
+            </div>
+
+            <div class="info-box">
+                <h3>How it works:</h3>
+                <ol style="text-align: left;">
+                    <li><strong>Read the LEFT paragraph</strong> - A text will appear on the left side of the screen. Read it naturally, moving your eyes across the words.</li>
+                    <li><strong>Read the RIGHT paragraph</strong> - After 15 seconds, a text will appear on the right side. Read it the same way.</li>
+                    <li><strong>Stay still</strong> - Keep your head in the same position throughout calibration.</li>
+                </ol>
+            </div>
+
+            <div class="info-box">
+                <h3>Important:</h3>
+                <ul style="text-align: left;">
+                    <li>This takes about 30 seconds total</li>
+                    <li>Read naturally - don't force your eyes to specific spots</li>
+                    <li>If calibration fails, you can restart it anytime</li>
+                    <li>Stay in the same position for the entire experiment</li>
+                </ul>
+            </div>
+
+            <button id="start-calibration-btn" class="btn btn-primary">Start Calibration</button>
+        </div>
+    </div>
+
+    <!-- Calibration Screen -->
+    <div id="calibration-screen" class="screen hidden">
+        <div class="position-warning">
+            ⚠️ Please stay still and maintain your position throughout the experiment
+        </div>
+
+        <h2 style="text-align: center; margin-top: 40px;">Calibration</h2>
+
+        <div id="calibration-area">
+            <div id="calibration-text-left" class="calibration-text">
+                <p>The quick brown fox jumps over the lazy dog. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+            </div>
+            <div id="calibration-text-right" class="calibration-text">
+                <p>Pack my box with five dozen liquor jugs. The five boxing wizards jump quickly. How vexingly quick daft zebras jump! Sphinx of black quartz, judge my vow. Two driven jocks help fax my big quiz.</p>
+            </div>
+        </div>
+
+        <div class="webcam-mini">
+            <video id="webcam-calibration" autoplay playsinline></video>
+            <canvas id="gaze-overlay"></canvas>
+        </div>
+
+        <div id="calibration-progress">
+            <div class="progress-bar">
+                <div id="calibration-progress-fill" class="progress-fill"></div>
+            </div>
+            <p id="calibration-status">Collecting calibration data...</p>
+            <button id="restart-calibration-btn" class="btn btn-secondary">Restart Calibration</button>
+        </div>
+    </div>
+
+    <!-- Validation Screen -->
+    <div id="validation-screen" class="screen hidden">
+        <div class="position-warning">
+            ⚠️ Please stay still and maintain your position throughout the experiment
+        </div>
+        <div class="container">
+            <h2>Calibration Validation</h2>
+            <p>Please look at each circle as it appears.</p>
+
+            <div id="validation-area">
+                <div id="validation-target" class="target hidden"></div>
+            </div>
+
+            <div id="validation-results" class="hidden">
+                <h3>Calibration Accuracy: <span id="accuracy-score"></span>%</h3>
+                <p id="accuracy-message"></p>
+                <button id="recalibrate-btn" class="btn btn-secondary hidden">Recalibrate</button>
+                <button id="continue-btn" class="btn btn-primary hidden">Continue to Experiment</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Experiment Instructions Screen -->
+    <div id="experiment-instructions-screen" class="screen hidden">
+        <div class="container">
+            <h2>Experiment Instructions</h2>
+            <div class="info-box">
+                <p>You will see pairs of images side-by-side.</p>
+                <p>Simply look naturally at whatever interests you.</p>
+                <p>Each pair will be shown for 3 seconds.</p>
+                <p>There are no right or wrong answers - just look naturally!</p>
+                <p><strong>Total trials: 50</strong></p>
+                <p>You'll get a short break every 20 trials.</p>
+            </div>
+            <button id="start-experiment-btn" class="btn btn-primary">Start Experiment</button>
+        </div>
+    </div>
+
+    <!-- Trial Screen -->
+    <div id="trial-screen" class="screen hidden">
+        <div class="position-warning">
+            ⚠️ Please stay still and maintain your position
+        </div>
+        <div class="trial-header">
+            <span id="trial-counter">Trial 1/50</span>
+            <div class="webcam-indicator" id="face-indicator">
+                <span class="indicator-dot"></span> Face Detected
+            </div>
+        </div>
+
+        <div id="fixation-cross" class="fixation hidden">+</div>
+
+        <div id="image-container" class="images-container hidden">
+            <canvas id="left-image" class="trial-image"></canvas>
+            <canvas id="right-image" class="trial-image"></canvas>
+        </div>
+
+        <div id="inter-trial" class="inter-trial hidden"></div>
+    </div>
+
+    <!-- Break Screen -->
+    <div id="break-screen" class="screen hidden">
+        <div class="position-warning">
+            ⚠️ Please maintain your position - don't move your chair or change your posture
+        </div>
+        <div class="container">
+            <h2>Take a Break</h2>
+            <p>You've completed <span id="trials-completed"></span> trials.</p>
+            <p>Take a moment to rest your eyes, but please stay in the same position.</p>
+            <p>Click continue when you're ready.</p>
+            <button id="continue-after-break-btn" class="btn btn-primary">Continue</button>
+        </div>
+    </div>
+
+    <!-- Completion Screen -->
+    <div id="completion-screen" class="screen hidden">
+        <div class="container">
+            <h2>Experiment Complete!</h2>
+            <p>Thank you for participating in this study.</p>
+            <p>Your data has been successfully submitted.</p>
+
+            <div class="completion-stats">
+                <p>Participant ID: <strong id="participant-id"></strong></p>
+                <p>Trials Completed: <strong id="total-trials"></strong></p>
+                <p>Calibration Accuracy: <strong id="final-accuracy"></strong>%</p>
+            </div>
+
+            <p class="thank-you">Your contribution helps advance our understanding of visual attention!</p>
+        </div>
+    </div>
+
+    <!-- Load Scripts -->
+    <script src="lib/webgazer.min.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/gazeTracker.js"></script>
+    <script src="js/imageScrambler.js"></script>
+    <script src="js/apiClient.js"></script>
+    <script src="js/experimentFlow.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

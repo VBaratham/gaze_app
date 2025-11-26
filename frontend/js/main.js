@@ -1,0 +1,159 @@
+// Main Application Entry Point
+
+/**
+ * Initialize the application when DOM is ready
+ */
+document.addEventListener('DOMContentLoaded', async () => {
+  Utils.log('='.repeat(60));
+  Utils.log('Gaze Tracking Experiment');
+  Utils.log('='.repeat(60));
+  Utils.log('Initializing application...');
+
+  try {
+    // Check browser compatibility
+    checkBrowserCompatibility();
+
+    // Test API connection
+    await testAPIConnection();
+
+    // Initialize experiment flow
+    await ExperimentFlow.initialize();
+
+    Utils.log('Application initialized successfully');
+
+  } catch (error) {
+    Utils.log('Initialization error', error);
+    showError('Failed to initialize application: ' + error.message);
+  }
+});
+
+/**
+ * Check if browser supports required features
+ */
+function checkBrowserCompatibility() {
+  const requiredFeatures = {
+    'getUserMedia': navigator.mediaDevices && navigator.mediaDevices.getUserMedia,
+    'Canvas': !!document.createElement('canvas').getContext,
+    'WebGL': !!document.createElement('canvas').getContext('webgl'),
+    'Fetch API': typeof fetch !== 'undefined'
+  };
+
+  const unsupported = [];
+  for (const [feature, supported] of Object.entries(requiredFeatures)) {
+    if (!supported) {
+      unsupported.push(feature);
+    }
+  }
+
+  if (unsupported.length > 0) {
+    throw new Error(`Browser missing required features: ${unsupported.join(', ')}`);
+  }
+
+  // Warn if mobile
+  if (Utils.isMobile()) {
+    console.warn('Warning: This experiment is designed for desktop/laptop computers');
+  }
+
+  Utils.log('Browser compatibility check passed');
+}
+
+/**
+ * Test connection to API
+ */
+async function testAPIConnection() {
+  try {
+    const health = await APIClient.healthCheck();
+    Utils.log('API connection successful', health);
+  } catch (error) {
+    Utils.log('API connection failed (continuing anyway)', error);
+    // Don't throw - allow offline testing
+  }
+}
+
+/**
+ * Show error message to user
+ */
+function showError(message) {
+  const errorDiv = document.createElement('div');
+  errorDiv.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #e74c3c;
+    color: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 10000;
+    max-width: 500px;
+    text-align: center;
+  `;
+  errorDiv.innerHTML = `
+    <h2 style="margin-bottom: 15px;">Error</h2>
+    <p>${message}</p>
+    <button onclick="location.reload()" style="
+      margin-top: 20px;
+      padding: 10px 20px;
+      background: white;
+      color: #e74c3c;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 600;
+    ">Reload Page</button>
+  `;
+  document.body.appendChild(errorDiv);
+}
+
+/**
+ * Handle page unload - warn if experiment is in progress
+ */
+window.addEventListener('beforeunload', (e) => {
+  if (ExperimentFlow.currentState === 'trial' ||
+      ExperimentFlow.currentState === 'break') {
+    e.preventDefault();
+    e.returnValue = 'Experiment in progress. Are you sure you want to leave?';
+    return e.returnValue;
+  }
+});
+
+/**
+ * Handle visibility change - pause/resume experiment
+ */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    Utils.log('Page hidden - pausing experiment');
+    if (GazeTracker.isInitialized) {
+      GazeTracker.pause();
+    }
+  } else {
+    Utils.log('Page visible - resuming experiment');
+    if (GazeTracker.isInitialized) {
+      GazeTracker.resume();
+    }
+  }
+});
+
+/**
+ * Global error handler
+ */
+window.addEventListener('error', (e) => {
+  Utils.log('Global error caught', {
+    message: e.message,
+    filename: e.filename,
+    lineno: e.lineno,
+    colno: e.colno,
+    error: e.error
+  });
+});
+
+/**
+ * Handle unhandled promise rejections
+ */
+window.addEventListener('unhandledrejection', (e) => {
+  Utils.log('Unhandled promise rejection', e.reason);
+});
+
+Utils.log('Main script loaded');

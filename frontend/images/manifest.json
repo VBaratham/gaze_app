@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2025-11-25",
+  "imageSpecs": {
+    "width": 800,
+    "height": 600,
+    "format": "jpg"
+  },
+  "categories": {
+    "erotica": {
+      "type": "high-attention",
+      "targetCount": 40,
+      "images": [
+        "images/erotica/1.jpg",
+        "images/erotica/2.jpg",
+        "images/erotica/3.jpg",
+        "images/erotica/4.jpg",
+        "images/erotica/5.jpg"
+      ]
+    },
+    "violence": {
+      "type": "high-attention",
+      "targetCount": 40,
+      "images": [
+        "images/violence/1.jpg",
+        "images/violence/2.jpg",
+        "images/violence/3.jpg",
+        "images/violence/4.jpg",
+        "images/violence/5.jpg"
+      ]
+    },
+    "gore": {
+      "type": "high-attention",
+      "targetCount": 40,
+      "images": [
+        "images/gore/1.jpg",
+        "images/gore/2.jpg",
+        "images/gore/3.jpg",
+        "images/gore/4.jpg",
+        "images/gore/5.jpg"
+      ]
+    },
+    "office-supplies": {
+      "type": "low-attention",
+      "targetCount": 30,
+      "images": [
+        "images/office-supplies/1.jpg",
+        "images/office-supplies/2.jpg",
+        "images/office-supplies/3.jpg",
+        "images/office-supplies/4.jpg",
+        "images/office-supplies/5.jpg"
+      ]
+    },
+    "furniture": {
+      "type": "low-attention",
+      "targetCount": 30,
+      "images": [
+        "images/furniture/1.jpg",
+        "images/furniture/2.jpg",
+        "images/furniture/3.jpg",
+        "images/furniture/4.jpg",
+        "images/furniture/5.jpg"
+      ]
+    },
+    "textures": {
+      "type": "low-attention",
+      "targetCount": 30,
+      "images": [
+        "images/textures/1.jpg",
+        "images/textures/2.jpg",
+        "images/textures/3.jpg",
+        "images/textures/4.jpg",
+        "images/textures/5.jpg"
+      ]
+    },
+    "noise": {
+      "type": "low-attention",
+      "targetCount": 30,
+      "images": [
+        "images/noise/1.jpg",
+        "images/noise/2.jpg",
+        "images/noise/3.jpg",
+        "images/noise/4.jpg",
+        "images/noise/5.jpg"
+      ]
+    }
+  },
+  "notes": [
+    "This is a placeholder manifest for local testing",
+    "Add actual image paths as you populate each category",
+    "In production, this will reference S3/CloudFront URLs"
+  ]
+}

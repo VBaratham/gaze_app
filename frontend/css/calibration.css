@@ -1,0 +1,158 @@
+/* Calibration Screen Styles */
+#calibration-screen {
+    padding: 0 !important;
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+#calibration-screen h2 {
+    position: absolute;
+    top: 50px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    z-index: 10;
+}
+
+#calibration-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.calibration-text {
+    position: absolute;
+    width: 550px;
+    padding: 40px;
+    background: #e3f2fd;
+    border: 3px solid #3498db;
+    border-radius: 8px;
+    font-size: 1.2rem;
+    line-height: 2;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.calibration-text p {
+    text-align: left;
+    margin: 0;
+}
+
+#calibration-text-left {
+    left: 40px;
+    border-color: #3498db;
+}
+
+#calibration-text-right {
+    right: 40px;
+    border-color: #e74c3c;
+    background: #ffe3e3;
+}
+
+/* Hide all video elements during calibration */
+#calibration-screen video,
+#calibration-screen .webcam-mini,
+#calibration-screen canvas {
+    display: none !important;
+}
+
+#gaze-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+}
+
+#calibration-progress {
+    position: absolute;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    max-width: 90%;
+    z-index: 20;
+}
+
+#calibration-status {
+    text-align: center;
+    color: #2c3e50;
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin: 10px 0;
+}
+
+#restart-calibration-btn {
+    display: block;
+    margin: 15px auto 0;
+}
+
+/* Validation Screen Styles */
+#validation-area {
+    position: relative;
+    width: 100%;
+    height: 500px;
+    background: #ecf0f1;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.target {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    background: #e74c3c;
+    border: 4px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 20px rgba(231, 76, 60, 0.5);
+    animation: pulse 0.8s ease-in-out infinite;
+    cursor: none;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+}
+
+#validation-results {
+    margin-top: 30px;
+    text-align: center;
+}
+
+#accuracy-score {
+    color: #27ae60;
+    font-size: 2rem;
+}
+
+#accuracy-message {
+    font-size: 1.2rem;
+    margin: 20px 0;
+    padding: 15px;
+    border-radius: 5px;
+}
+
+#accuracy-message.good {
+    background: #d5f4e6;
+    color: #27ae60;
+}
+
+#accuracy-message.poor {
+    background: #fadbd8;
+    color: #e74c3c;
+}
+
+.btn-group {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 20px;
+}
