@@ -325,29 +325,16 @@ const ExperimentFlow = {
         const target = targets[i];
         Utils.log(`Showing target ${i + 1}/${targets.length} at (${target.x}, ${target.y})`);
 
+        // Position the target
         targetDiv.style.left = (target.x - 30) + 'px';
         targetDiv.style.top = (target.y - 30) + 'px';
         targetDiv.style.display = 'block';
 
-        // Collect gaze samples while target is visible
-        const samples = [];
-        const startTime = Date.now();
-        const sampleDuration = 1500;
+        // Wait a brief moment for the DOM to update and user to focus
+        await Utils.sleep(100);
 
-        while (Date.now() - startTime < sampleDuration) {
-          try {
-            const prediction = webgazer.getCurrentPrediction();
-            if (prediction) {
-              samples.push({
-                x: prediction.x,
-                y: prediction.y
-              });
-            }
-          } catch (predError) {
-            Utils.log('Error getting prediction:', predError);
-          }
-          await Utils.sleep(33); // ~30Hz
-        }
+        // Collect gaze samples using requestAnimationFrame for better performance
+        const samples = await this._collectGazeSamples(1500);
 
         Utils.log(`Target ${i + 1} complete. Collected ${samples.length} samples`);
 
@@ -368,6 +355,9 @@ const ExperimentFlow = {
         } else {
           Utils.log(`Warning: No samples collected for target ${i + 1}`);
         }
+
+        // Brief pause before next target
+        await Utils.sleep(200);
       }
     } catch (error) {
       Utils.log('Error during validation loop:', error);
@@ -410,6 +400,45 @@ const ExperimentFlow = {
       accuracyMessage.style.color = '#e74c3c';
       recalibrateBtn.classList.remove('hidden');
     }
+  },
+
+  /**
+   * Collect gaze samples for a specified duration without blocking the event loop
+   */
+  async _collectGazeSamples(duration) {
+    return new Promise((resolve) => {
+      const samples = [];
+      const startTime = Date.now();
+      const sampleInterval = 33; // ~30Hz
+
+      const collectSample = () => {
+        const elapsed = Date.now() - startTime;
+
+        if (elapsed < duration) {
+          // Collect a sample
+          try {
+            const prediction = webgazer.getCurrentPrediction();
+            if (prediction) {
+              samples.push({
+                x: prediction.x,
+                y: prediction.y
+              });
+            }
+          } catch (predError) {
+            Utils.log('Error getting prediction:', predError);
+          }
+
+          // Schedule next sample collection
+          setTimeout(collectSample, sampleInterval);
+        } else {
+          // Duration complete, resolve with collected samples
+          resolve(samples);
+        }
+      };
+
+      // Start collecting
+      collectSample();
+    });
   },
 
   /**
