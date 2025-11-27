@@ -170,3 +170,80 @@
     justify-content: center;
     margin-top: 20px;
 }
+
+/* Click Calibration Screen Styles */
+#click-calibration-screen {
+    padding: 0 !important;
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #f8f9fa;
+}
+
+#click-calibration-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.calibration-point {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background: #e74c3c;
+    border: 4px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 15px rgba(231, 76, 60, 0.4);
+    cursor: pointer;
+    transform: translate(-50%, -50%);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.calibration-point:hover {
+    transform: translate(-50%, -50%) scale(1.2);
+    box-shadow: 0 0 25px rgba(231, 76, 60, 0.6);
+}
+
+.calibration-point.clicked-1 {
+    background: #c0392b;
+    box-shadow: 0 0 15px rgba(192, 57, 43, 0.5);
+}
+
+.calibration-point.clicked-2 {
+    background: #a93226;
+    box-shadow: 0 0 15px rgba(169, 50, 38, 0.5);
+}
+
+.calibration-point.clicked-3 {
+    background: #922b21;
+    box-shadow: 0 0 15px rgba(146, 43, 33, 0.5);
+}
+
+.calibration-point.clicked-4 {
+    background: #7b241c;
+    box-shadow: 0 0 15px rgba(123, 36, 28, 0.5);
+}
+
+.calibration-point.complete {
+    background: #27ae60 !important;
+    border-color: #fff;
+    box-shadow: 0 0 20px rgba(39, 174, 96, 0.5);
+    cursor: default;
+    pointer-events: none;
+}
+
+.calibration-point.complete::after {
+    content: "✓";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+}
+

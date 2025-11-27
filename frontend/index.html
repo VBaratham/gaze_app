@@ -78,18 +78,19 @@
             <div class="info-box">
                 <h3>How it works:</h3>
                 <ol style="text-align: left;">
-                    <li><strong>Read the LEFT paragraph</strong> - A text will appear on the left side of the screen. Read it naturally, moving your eyes across the words.</li>
-                    <li><strong>Read the RIGHT paragraph</strong> - After 15 seconds, a text will appear on the right side. Read it the same way.</li>
-                    <li><strong>Stay still</strong> - Keep your head in the same position throughout calibration.</li>
+                    <li><strong>Click on calibration points</strong> - Red circles will appear on screen.</li>
+                    <li><strong>Look directly at each circle</strong> - While looking at a circle, click it 5 times.</li>
+                    <li><strong>Complete all 9 points</strong> - Each point will turn green when complete.</li>
+                    <li><strong>Stay still</strong> - Keep your head in the same position throughout.</li>
                 </ol>
             </div>
 
             <div class="info-box">
                 <h3>Important:</h3>
                 <ul style="text-align: left;">
-                    <li>This takes about 30 seconds total</li>
-                    <li>Read naturally - don't force your eyes to specific spots</li>
-                    <li>If calibration fails, you can restart it anytime</li>
+                    <li>This takes about 1 minute</li>
+                    <li>Look directly at each point while clicking</li>
+                    <li>If calibration accuracy is low, you can restart</li>
                     <li>Stay in the same position for the entire experiment</li>
                 </ul>
             </div>
@@ -98,34 +99,57 @@
         </div>
     </div>
 
-    <!-- Calibration Screen -->
-    <div id="calibration-screen" class="screen hidden">
+    <!-- Click Calibration Screen -->
+    <div id="click-calibration-screen" class="screen hidden">
         <div class="position-warning">
-            ⚠️ Please stay still and maintain your position throughout the experiment
+            Look at each red circle and click it 10 times
         </div>
 
-        <h2 style="text-align: center; margin-top: 40px;">Calibration</h2>
-
-        <div id="calibration-area">
-            <div id="calibration-text-left" class="calibration-text">
-                <p>The quick brown fox jumps over the lazy dog. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
-            </div>
-            <div id="calibration-text-right" class="calibration-text">
-                <p>Pack my box with five dozen liquor jugs. The five boxing wizards jump quickly. How vexingly quick daft zebras jump! Sphinx of black quartz, judge my vow. Two driven jocks help fax my big quiz.</p>
-            </div>
+        <div id="click-calibration-area">
+            <!-- 9-point calibration grid -->
+            <div class="calibration-point" data-point="1" style="top: 8%; left: 10%;"></div>
+            <div class="calibration-point" data-point="2" style="top: 8%; left: 50%;"></div>
+            <div class="calibration-point" data-point="3" style="top: 8%; left: 90%;"></div>
+            <div class="calibration-point" data-point="4" style="top: 50%; left: 10%;"></div>
+            <div class="calibration-point" data-point="5" style="top: 50%; left: 50%;"></div>
+            <div class="calibration-point" data-point="6" style="top: 50%; left: 90%;"></div>
+            <div class="calibration-point" data-point="7" style="top: 92%; left: 10%;"></div>
+            <div class="calibration-point" data-point="8" style="top: 92%; left: 50%;"></div>
+            <div class="calibration-point" data-point="9" style="top: 92%; left: 90%;"></div>
         </div>
 
-        <div class="webcam-mini">
-            <video id="webcam-calibration" autoplay playsinline></video>
-            <canvas id="gaze-overlay"></canvas>
-        </div>
+    </div>
 
-        <div id="calibration-progress">
-            <div class="progress-bar">
-                <div id="calibration-progress-fill" class="progress-fill"></div>
+    <!-- Validation Instructions Screen -->
+    <div id="validation-instructions-screen" class="screen hidden">
+        <div class="container">
+            <h2>Calibration Verification</h2>
+            <div class="info-box">
+                <h3>What happens next?</h3>
+                <p>We'll now verify the accuracy of your calibration.</p>
             </div>
-            <p id="calibration-status">Collecting calibration data...</p>
-            <button id="restart-calibration-btn" class="btn btn-secondary">Restart Calibration</button>
+
+            <div class="info-box">
+                <h3>Instructions:</h3>
+                <ol style="text-align: left;">
+                    <li><strong>Look directly at each circle</strong> as it appears on the screen</li>
+                    <li><strong>Keep your head still</strong> - move only your eyes</li>
+                    <li><strong>Focus on the center</strong> of each circle</li>
+                    <li>Each circle will appear for 2.5 seconds</li>
+                </ol>
+            </div>
+
+            <div class="info-box">
+                <h3>Important:</h3>
+                <ul style="text-align: left;">
+                    <li>There will be 6 circles in different positions</li>
+                    <li>Stay in the same position throughout</li>
+                    <li>This will take about 20 seconds</li>
+                    <li>If accuracy is too low, you can recalibrate</li>
+                </ul>
+            </div>
+
+            <button id="start-validation-btn" class="btn btn-primary">Start Verification</button>
         </div>
     </div>
 

@@ -49,12 +49,56 @@ function checkBrowserCompatibility() {
     throw new Error(`Browser missing required features: ${unsupported.join(', ')}`);
   }
 
-  // Warn if mobile
+  // Show mobile warning in UI
   if (Utils.isMobile()) {
-    console.warn('Warning: This experiment is designed for desktop/laptop computers');
+    showMobileWarning();
   }
 
   Utils.log('Browser compatibility check passed');
+}
+
+/**
+ * Show mobile device warning to user
+ */
+function showMobileWarning() {
+  const warningDiv = document.createElement('div');
+  warningDiv.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.9);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  `;
+  warningDiv.innerHTML = `
+    <div style="
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      max-width: 500px;
+      text-align: center;
+    ">
+      <h2 style="color: #e74c3c; margin-bottom: 20px;">Desktop Required</h2>
+      <p style="margin-bottom: 15px;">
+        This experiment requires a <strong>desktop or laptop computer</strong> with a webcam.
+      </p>
+      <p style="margin-bottom: 20px;">
+        Eye tracking is not supported on mobile devices or tablets.
+      </p>
+      <p style="color: #666;">
+        Please visit this page on a computer to participate.
+      </p>
+    </div>
+  `;
+  document.body.appendChild(warningDiv);
+
+  // Prevent experiment from starting
+  throw new Error('Mobile device detected - experiment requires desktop');
 }
 
 /**

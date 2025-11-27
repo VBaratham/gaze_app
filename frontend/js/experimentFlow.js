@@ -18,7 +18,10 @@ const ExperimentFlow = {
   fixationTimeout: null,
   imageTimeout: null,
   interTrialTimeout: null,
-  calibrationIntervals: [],
+
+  // Click calibration tracking
+  clickCalibrationData: {},
+  clicksRequired: 10, // Increased from 5 to 10 for better calibration
 
   /**
    * Initialize the experiment flow
@@ -31,6 +34,9 @@ const ExperimentFlow = {
 
     // Load image manifest
     await this._loadImageManifest();
+
+    // Try to retry any previously failed trials
+    await this._retryFailedTrials();
 
     // Start at welcome screen
     this.transitionTo('welcome');
@@ -55,8 +61,11 @@ const ExperimentFlow = {
       case 'camera':
         this._handleCamera();
         break;
-      case 'calibration':
-        this._handleCalibration();
+      case 'click-calibration':
+        this._handleClickCalibration();
+        break;
+      case 'validation-instructions':
+        this._handleValidationInstructions();
         break;
       case 'validation':
         this._handleValidation();
@@ -77,50 +86,66 @@ const ExperimentFlow = {
   },
 
   /**
+   * Safely add event listener to element
+   */
+  _safeAddListener(elementId, event, handler) {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.addEventListener(event, handler);
+    } else {
+      Utils.log(`Warning: Element '${elementId}' not found`);
+    }
+    return element;
+  },
+
+  /**
    * Set up event listeners for buttons
    */
   _setupEventListeners() {
     // Welcome screen
-    document.getElementById('consent-checkbox').addEventListener('change', (e) => {
-      document.getElementById('begin-btn').disabled = !e.target.checked;
+    this._safeAddListener('consent-checkbox', 'change', (e) => {
+      const beginBtn = document.getElementById('begin-btn');
+      if (beginBtn) {
+        beginBtn.disabled = !e.target.checked;
+      }
     });
 
-    document.getElementById('begin-btn').addEventListener('click', () => {
+    this._safeAddListener('begin-btn', 'click', () => {
       this.transitionTo('camera');
     });
 
     // Camera screen
-    document.getElementById('camera-ready-btn').addEventListener('click', () => {
+    this._safeAddListener('camera-ready-btn', 'click', () => {
       this.transitionTo('calibration-instructions');
     });
 
-    // Calibration instructions screen
-    document.getElementById('start-calibration-btn').addEventListener('click', () => {
-      this.transitionTo('calibration');
-    });
-
-    // Calibration screen - restart button
-    document.getElementById('restart-calibration-btn').addEventListener('click', () => {
-      this._restartCalibration();
+    // Calibration instructions screen - start with click calibration
+    this._safeAddListener('start-calibration-btn', 'click', () => {
+      this.transitionTo('click-calibration');
     });
 
     // Experiment instructions
-    document.getElementById('start-experiment-btn').addEventListener('click', () => {
+    this._safeAddListener('start-experiment-btn', 'click', () => {
       this._startExperiment();
     });
 
     // Break screen
-    document.getElementById('continue-after-break-btn').addEventListener('click', () => {
+    this._safeAddListener('continue-after-break-btn', 'click', () => {
       this.transitionTo('trial');
     });
 
     // Validation screen buttons (will be enabled dynamically)
-    document.getElementById('recalibrate-btn')?.addEventListener('click', () => {
-      this.transitionTo('calibration');
+    this._safeAddListener('recalibrate-btn', 'click', () => {
+      this._restartCalibration();
     });
 
-    document.getElementById('continue-btn')?.addEventListener('click', () => {
+    this._safeAddListener('continue-btn', 'click', () => {
       this.transitionTo('experiment-instructions');
+    });
+
+    // Validation instructions screen
+    this._safeAddListener('start-validation-btn', 'click', () => {
+      this.transitionTo('validation');
     });
   },
 
@@ -181,97 +206,127 @@ const ExperimentFlow = {
    * Camera setup handler
    */
   async _handleCamera() {
+    const cameraStatus = document.getElementById('camera-status');
+    const cameraReadyBtn = document.getElementById('camera-ready-btn');
+
     try {
-      document.getElementById('camera-status').textContent = 'Initializing camera...';
+      if (cameraStatus) cameraStatus.textContent = 'Initializing camera...';
 
       await GazeTracker.initialize();
 
-      document.getElementById('camera-status').textContent = 'Camera ready!';
-      document.getElementById('camera-ready-btn').classList.remove('hidden');
+      if (cameraStatus) cameraStatus.textContent = 'Waiting for face detection...';
+
+      // Wait for stable face detection before enabling button
+      const checkFaceInterval = setInterval(() => {
+        if (GazeTracker.isFaceStablyDetected()) {
+          clearInterval(checkFaceInterval);
+          if (cameraStatus) cameraStatus.textContent = 'Face detected! Camera ready.';
+          if (cameraReadyBtn) cameraReadyBtn.classList.remove('hidden');
+        } else if (GazeTracker.faceDetected) {
+          if (cameraStatus) cameraStatus.textContent = 'Face detected - please hold still...';
+        } else {
+          if (cameraStatus) cameraStatus.textContent = 'Position your face in the camera view';
+        }
+      }, 200);
+
+      // Set up face status change listener for when button is already visible
+      GazeTracker.onFaceStatusChange = (isDetected) => {
+        if (!isDetected && cameraReadyBtn && !cameraReadyBtn.classList.contains('hidden')) {
+          if (cameraStatus) cameraStatus.textContent = 'Face lost - please reposition';
+        } else if (isDetected && cameraReadyBtn && !cameraReadyBtn.classList.contains('hidden')) {
+          if (cameraStatus) cameraStatus.textContent = 'Face detected! Camera ready.';
+        }
+      };
 
     } catch (error) {
       Utils.log('Camera initialization error', error);
-      document.getElementById('camera-status').textContent = `Error: ${error.message}`;
+      if (cameraStatus) cameraStatus.textContent = `Error: ${error.message}`;
     }
   },
 
   /**
-   * Calibration handler
+   * Click calibration handler - WebGazer.js recommended approach
    */
-  async _handleCalibration() {
-    // Clear any existing intervals
-    this._clearCalibrationIntervals();
+  _handleClickCalibration() {
+    Utils.log('Starting click calibration');
 
-    const leftText = document.getElementById('calibration-text-left');
-    const rightText = document.getElementById('calibration-text-right');
-    const progressFill = document.getElementById('calibration-progress-fill');
-    const statusText = document.getElementById('calibration-status');
+    // Reset click tracking data
+    this.clickCalibrationData = {};
 
-    const duration = CONFIG.calibration.duration;
-    const halfDuration = duration / 2;
+    // Get all calibration points
+    const points = document.querySelectorAll('.calibration-point');
 
-    // Show only left side first
-    leftText.classList.remove('hidden');
-    rightText.classList.add('hidden');
-    leftText.style.background = '#e3f2fd';
-    statusText.textContent = 'Please read the LEFT paragraph naturally';
-    progressFill.style.width = '0%';
+    // Reset all points
+    points.forEach(point => {
+      point.className = 'calibration-point';
+      const pointId = point.getAttribute('data-point');
+      this.clickCalibrationData[pointId] = 0;
+    });
 
-    // Start collecting left gaze data
-    GazeTracker.startCalibration('left');
+    // Count remaining points
+    const getRemainingCount = () => {
+      return Object.values(this.clickCalibrationData).filter(c => c < this.clicksRequired).length;
+    };
 
-    // Progress animation for left side
-    let startTime = Date.now();
-    const leftInterval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min((elapsed / halfDuration) * 50, 50);
-      progressFill.style.width = progress + '%';
+    // Add click handlers to each point
+    points.forEach(point => {
+      const pointId = point.getAttribute('data-point');
 
-      if (elapsed >= halfDuration) {
-        clearInterval(leftInterval);
+      const clickHandler = (e) => {
+        // Don't prevent default - let WebGazer see the click too
 
-        // Switch to right side only
-        leftText.classList.add('hidden');
-        rightText.classList.remove('hidden');
-        rightText.style.background = '#e3f2fd';
-        statusText.textContent = 'Please read the RIGHT paragraph naturally';
+        // Increment click count
+        this.clickCalibrationData[pointId]++;
+        const clicks = this.clickCalibrationData[pointId];
 
-        GazeTracker.calibrationSide = 'right';
+        Utils.log(`Point ${pointId} clicked ${clicks}/${this.clicksRequired} times`);
 
-        // Progress animation for right side
-        startTime = Date.now();
-        const rightInterval = setInterval(() => {
-          const elapsed = Date.now() - startTime;
-          const progress = Math.min(50 + (elapsed / halfDuration) * 50, 100);
-          progressFill.style.width = progress + '%';
+        // Get the actual position of the calibration point on screen
+        const rect = point.getBoundingClientRect();
+        const pointX = rect.left + rect.width / 2;
+        const pointY = rect.top + rect.height / 2;
 
-          if (elapsed >= halfDuration) {
-            clearInterval(rightInterval);
+        // Explicitly record this position for WebGazer training
+        // This tells WebGazer: "the user is looking at (pointX, pointY) right now"
+        try {
+          webgazer.recordScreenPosition(pointX, pointY, 'click');
+          Utils.log(`Recorded calibration point at (${pointX.toFixed(0)}, ${pointY.toFixed(0)})`);
+        } catch (err) {
+          Utils.log('Error recording screen position:', err);
+        }
 
-            // Calibration complete
-            statusText.textContent = 'Calibration complete!';
-            const calibrationResult = GazeTracker.stopCalibration();
+        // Update visual state
+        point.classList.remove('clicked-1', 'clicked-2', 'clicked-3', 'clicked-4', 'complete');
+        if (clicks >= this.clicksRequired) {
+          point.classList.add('complete');
+          point.removeEventListener('click', clickHandler);
+        } else {
+          point.classList.add(`clicked-${clicks}`);
+        }
 
-            Utils.log('Calibration result', calibrationResult);
+        // Check if all points are complete
+        const remaining = getRemainingCount();
+        if (remaining === 0) {
+          Utils.log('Click calibration complete, proceeding to validation instructions');
+          // Mark as calibrated and go to validation instructions
+          GazeTracker.isCalibrated = true;
+          // Set threshold to screen center (click calibration gives us actual coordinates)
+          GazeTracker.gazeThreshold = window.innerWidth / 2;
+          setTimeout(() => {
+            this.transitionTo('validation-instructions');
+          }, 500);
+        }
+      };
 
-            // Move to validation after brief delay
-            setTimeout(() => {
-              this.transitionTo('validation');
-            }, 1000);
-          }
-        }, 100);
-        this.calibrationIntervals.push(rightInterval);
-      }
-    }, 100);
-    this.calibrationIntervals.push(leftInterval);
+      point.addEventListener('click', clickHandler);
+    });
   },
 
   /**
-   * Clear all calibration intervals
+   * Validation instructions handler
    */
-  _clearCalibrationIntervals() {
-    this.calibrationIntervals.forEach(interval => clearInterval(interval));
-    this.calibrationIntervals = [];
+  _handleValidationInstructions() {
+    // Nothing special needed - just display the instructions
   },
 
   /**
@@ -280,17 +335,23 @@ const ExperimentFlow = {
   _restartCalibration() {
     Utils.log('Restarting calibration');
 
-    // Clear existing intervals
-    this._clearCalibrationIntervals();
+    // Hide the validation results box
+    const resultsDiv = document.getElementById('validation-results');
+    const recalibrateBtn = document.getElementById('recalibrate-btn');
+    const continueBtn = document.getElementById('continue-btn');
+    if (resultsDiv) resultsDiv.classList.add('hidden');
+    if (recalibrateBtn) recalibrateBtn.classList.add('hidden');
+    if (continueBtn) continueBtn.classList.add('hidden');
 
     // Reset gaze tracker calibration state
-    GazeTracker.leftGazePoints = [];
-    GazeTracker.rightGazePoints = [];
     GazeTracker.isCalibrated = false;
     GazeTracker.gazeThreshold = null;
 
-    // Restart the calibration process
-    this._handleCalibration();
+    // Reset click calibration data
+    this.clickCalibrationData = {};
+
+    // Start from click calibration again
+    this.transitionTo('click-calibration');
   },
 
   /**
@@ -303,6 +364,12 @@ const ExperimentFlow = {
     const accuracyMessage = document.getElementById('accuracy-message');
     const recalibrateBtn = document.getElementById('recalibrate-btn');
     const continueBtn = document.getElementById('continue-btn');
+
+    // Validate all required elements exist
+    if (!targetDiv || !resultsDiv || !accuracyScore || !accuracyMessage) {
+      Utils.log('Error: Missing validation DOM elements');
+      return;
+    }
 
     Utils.log('Starting validation');
 
@@ -331,10 +398,10 @@ const ExperimentFlow = {
         targetDiv.style.display = 'block';
 
         // Wait a brief moment for the DOM to update and user to focus
-        await Utils.sleep(100);
+        await Utils.sleep(200);
 
-        // Collect gaze samples using requestAnimationFrame for better performance
-        const samples = await this._collectGazeSamples(1500);
+        // Collect gaze samples for longer to get more data (increased from 1500ms to 2500ms)
+        const samples = await this._collectGazeSamples(2500);
 
         Utils.log(`Target ${i + 1} complete. Collected ${samples.length} samples`);
 
@@ -369,12 +436,20 @@ const ExperimentFlow = {
 
     // Calculate accuracy from collected data
     Utils.log('Calculating validation accuracy');
-    const avgDistance = Utils.mean(validationData.map(r => r.distance));
-    const screenDiagonal = Math.sqrt(
-      Math.pow(window.innerWidth, 2) +
-      Math.pow(window.innerHeight, 2)
-    );
-    const accuracy = Math.max(0, 1 - (avgDistance / (screenDiagonal * 0.3)));
+    Utils.log(`Collected validation data for ${validationData.length} targets`);
+
+    let accuracy = 0;
+    let avgDistance = 0;
+
+    if (validationData.length > 0) {
+      avgDistance = Utils.mean(validationData.map(r => r.distance));
+      const screenDiagonal = Math.sqrt(
+        Math.pow(window.innerWidth, 2) +
+        Math.pow(window.innerHeight, 2)
+      );
+      // Clamp accuracy to [0, 1]
+      accuracy = Math.min(1, Math.max(0, 1 - (avgDistance / (screenDiagonal * 0.3))));
+    }
 
     const validationResult = {
       accuracy: accuracy,
@@ -394,11 +469,11 @@ const ExperimentFlow = {
     if (validationResult.accuracy >= CONFIG.calibration.minAccuracy) {
       accuracyMessage.textContent = 'Great! Calibration is accurate enough to proceed.';
       accuracyMessage.style.color = '#27ae60';
-      continueBtn.classList.remove('hidden');
+      if (continueBtn) continueBtn.classList.remove('hidden');
     } else {
       accuracyMessage.textContent = 'Calibration accuracy is low. Please recalibrate.';
       accuracyMessage.style.color = '#e74c3c';
-      recalibrateBtn.classList.remove('hidden');
+      if (recalibrateBtn) recalibrateBtn.classList.remove('hidden');
     }
   },
 
@@ -409,20 +484,43 @@ const ExperimentFlow = {
     return new Promise((resolve) => {
       const samples = [];
       const startTime = Date.now();
-      const sampleInterval = 33; // ~30Hz
+      const sampleInterval = 20; // Increased frequency: ~50Hz (was 33ms/30Hz)
 
-      const collectSample = () => {
+      let validCount = 0;
+      let nullCount = 0;
+      let invalidCount = 0;
+      let loggedOnce = false;
+
+      const collectSample = async () => {
         const elapsed = Date.now() - startTime;
 
         if (elapsed < duration) {
           // Collect a sample
           try {
-            const prediction = webgazer.getCurrentPrediction();
-            if (prediction) {
+            // getCurrentPrediction returns a Promise in newer WebGazer versions
+            const prediction = await webgazer.getCurrentPrediction();
+            if (!prediction) {
+              nullCount++;
+            } else if (typeof prediction.x === 'number' && !isNaN(prediction.x) &&
+                       typeof prediction.y === 'number' && !isNaN(prediction.y)) {
+              validCount++;
               samples.push({
                 x: prediction.x,
                 y: prediction.y
               });
+            } else {
+              invalidCount++;
+              // Log first invalid prediction to debug
+              if (!loggedOnce) {
+                Utils.log('Invalid prediction sample:', {
+                  prediction: prediction,
+                  xType: typeof prediction.x,
+                  yType: typeof prediction.y,
+                  xIsNaN: isNaN(prediction.x),
+                  yIsNaN: isNaN(prediction.y)
+                });
+                loggedOnce = true;
+              }
             }
           } catch (predError) {
             Utils.log('Error getting prediction:', predError);
@@ -432,6 +530,7 @@ const ExperimentFlow = {
           setTimeout(collectSample, sampleInterval);
         } else {
           // Duration complete, resolve with collected samples
+          Utils.log(`Sample collection complete: ${validCount} valid, ${nullCount} null, ${invalidCount} invalid`);
           resolve(samples);
         }
       };
@@ -541,8 +640,10 @@ const ExperimentFlow = {
     }
 
     // Update trial counter
-    document.getElementById('trial-counter').textContent =
-      `Trial ${trial.trialNumber}/${CONFIG.experiment.numTrials}`;
+    const trialCounter = document.getElementById('trial-counter');
+    if (trialCounter) {
+      trialCounter.textContent = `Trial ${trial.trialNumber}/${CONFIG.experiment.numTrials}`;
+    }
 
     // Get canvas elements
     const leftCanvas = document.getElementById('left-image');
@@ -550,6 +651,12 @@ const ExperimentFlow = {
     const fixationCross = document.getElementById('fixation-cross');
     const imageContainer = document.getElementById('image-container');
     const interTrial = document.getElementById('inter-trial');
+
+    // Validate all required elements exist
+    if (!leftCanvas || !rightCanvas || !fixationCross || !imageContainer || !interTrial) {
+      Utils.log('Error: Missing trial DOM elements');
+      return;
+    }
 
     // Hide everything initially
     fixationCross.classList.add('hidden');
@@ -638,24 +745,86 @@ const ExperimentFlow = {
     }
   },
 
+  // Failed trial data queue for retry
+  failedTrials: [],
+
   /**
-   * Save trial data to backend
+   * Save trial data to backend with retry logic
    */
   async _saveTrialData(trialData) {
-    try {
-      // Prepare data for backend (exclude raw gaze points from main payload)
-      const { gazePoints, ...metadata } = trialData;
+    const maxRetries = 3;
+    const retryDelay = 1000;
 
-      await APIClient.saveTrial(this.sessionId, {
-        ...metadata,
-        gazePointCount: gazePoints.length
-      });
+    // Prepare data for backend (exclude raw gaze points from main payload)
+    const { gazePoints, ...metadata } = trialData;
+    const payload = {
+      ...metadata,
+      gazePointCount: gazePoints.length
+    };
 
-      // TODO: In production, upload gazePoints to S3 separately
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await APIClient.saveTrial(this.sessionId, payload);
+        Utils.log(`Trial ${trialData.trialNumber} saved successfully`);
+        return; // Success
+      } catch (error) {
+        Utils.log(`Error saving trial data (attempt ${attempt}/${maxRetries})`, error);
 
-    } catch (error) {
-      Utils.log('Error saving trial data', error);
-      // Continue anyway - don't block experiment
+        if (attempt < maxRetries) {
+          await Utils.sleep(retryDelay * attempt); // Exponential backoff
+        } else {
+          // All retries failed - store locally
+          Utils.log('All retries failed, storing trial locally');
+          this.failedTrials.push({
+            sessionId: this.sessionId,
+            trialData: payload,
+            timestamp: Date.now()
+          });
+
+          // Store in localStorage as backup
+          try {
+            const storedTrials = JSON.parse(localStorage.getItem('failedTrials') || '[]');
+            storedTrials.push({
+              sessionId: this.sessionId,
+              trialData: payload,
+              timestamp: Date.now()
+            });
+            localStorage.setItem('failedTrials', JSON.stringify(storedTrials));
+            Utils.log('Trial data backed up to localStorage');
+          } catch (storageError) {
+            Utils.log('Failed to backup to localStorage', storageError);
+          }
+        }
+      }
+    }
+  },
+
+  /**
+   * Retry sending failed trials
+   */
+  async _retryFailedTrials() {
+    const storedTrials = JSON.parse(localStorage.getItem('failedTrials') || '[]');
+    if (storedTrials.length === 0) return;
+
+    Utils.log(`Retrying ${storedTrials.length} failed trials`);
+    const successfulRetries = [];
+
+    for (let i = 0; i < storedTrials.length; i++) {
+      const trial = storedTrials[i];
+      try {
+        await APIClient.saveTrial(trial.sessionId, trial.trialData);
+        successfulRetries.push(i);
+        Utils.log(`Successfully retried trial from session ${trial.sessionId}`);
+      } catch (error) {
+        Utils.log(`Retry failed for trial from session ${trial.sessionId}`, error);
+      }
+    }
+
+    // Remove successful retries from storage
+    if (successfulRetries.length > 0) {
+      const remaining = storedTrials.filter((_, i) => !successfulRetries.includes(i));
+      localStorage.setItem('failedTrials', JSON.stringify(remaining));
+      Utils.log(`${successfulRetries.length} trials successfully retried, ${remaining.length} remaining`);
     }
   },
 
@@ -663,7 +832,10 @@ const ExperimentFlow = {
    * Break handler
    */
   _handleBreak() {
-    document.getElementById('trials-completed').textContent = this.currentTrialIndex;
+    const trialsCompleted = document.getElementById('trials-completed');
+    if (trialsCompleted) {
+      trialsCompleted.textContent = this.currentTrialIndex;
+    }
 
     // Pause gaze tracking
     GazeTracker.pause();
@@ -678,10 +850,31 @@ const ExperimentFlow = {
       await APIClient.completeSession(this.sessionId);
 
       // Display completion stats
-      document.getElementById('participant-id').textContent = this.participantId;
-      document.getElementById('total-trials').textContent = this.trials.length;
-      document.getElementById('final-accuracy').textContent =
-        (GazeTracker.calibrationAccuracy * 100).toFixed(0);
+      const participantIdEl = document.getElementById('participant-id');
+      const totalTrialsEl = document.getElementById('total-trials');
+      const finalAccuracyEl = document.getElementById('final-accuracy');
+
+      if (participantIdEl) participantIdEl.textContent = this.participantId;
+      if (totalTrialsEl) totalTrialsEl.textContent = this.trials.length;
+      if (finalAccuracyEl) {
+        finalAccuracyEl.textContent = (GazeTracker.calibrationAccuracy * 100).toFixed(0);
+      }
+
+      // Check for failed trials and show warning
+      const storedTrials = JSON.parse(localStorage.getItem('failedTrials') || '[]');
+      if (storedTrials.length > 0 || this.failedTrials.length > 0) {
+        const failedCount = storedTrials.length + this.failedTrials.length;
+        Utils.log(`Warning: ${failedCount} trial(s) could not be saved to server`);
+
+        // Add warning message to completion screen
+        const completionContainer = document.querySelector('#completion-screen .container');
+        if (completionContainer) {
+          const warningDiv = document.createElement('div');
+          warningDiv.style.cssText = 'background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin: 20px 0;';
+          warningDiv.innerHTML = `<strong>Note:</strong> ${failedCount} trial(s) could not be saved due to network issues. The data has been stored locally and will be uploaded on your next visit.`;
+          completionContainer.insertBefore(warningDiv, completionContainer.querySelector('.thank-you'));
+        }
+      }
 
       Utils.log('Experiment complete!');
 

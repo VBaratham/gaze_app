@@ -5,10 +5,8 @@ const GazeTracker = {
   isCalibrated: false,
   faceDetected: false,
 
-  // Calibration data
-  leftGazePoints: [],
-  rightGazePoints: [],
-  gazeThreshold: null, // X-coordinate threshold for left vs right
+  // Calibration
+  gazeThreshold: null, // X-coordinate threshold for left vs right (screen center after click calibration)
 
   // Real-time gaze tracking
   currentGazeData: [],
@@ -34,7 +32,12 @@ const GazeTracker = {
         videoElement.srcObject = stream;
       }
 
-      // Initialize WebGazer
+      // Initialize WebGazer with video preview disabled
+      webgazer.params.showVideoPreview = false;
+      webgazer.params.showFaceOverlay = false;
+      webgazer.params.showFaceFeedbackBox = false;
+      webgazer.params.showGazeDot = false;
+
       await webgazer
         .setGazeListener((data, clock) => {
           if (data) {
@@ -43,10 +46,8 @@ const GazeTracker = {
         })
         .begin();
 
-      // Configure WebGazer
-      webgazer.params.showVideoPreview = false; // We'll handle video display ourselves
-      webgazer.params.showFaceOverlay = false;
-      webgazer.params.showFaceFeedbackBox = false;
+      // Hide WebGazer's auto-created video elements
+      this._hideWebGazerElements();
 
       // Set up face detection monitoring
       this._setupFaceDetection();
@@ -62,13 +63,82 @@ const GazeTracker = {
     }
   },
 
+  // Face detection tracking
+  faceDetectionHistory: [],
+  faceDetectionHistorySize: 10, // Track last 10 checks (1 second at 100ms intervals)
+  onFaceStatusChange: null,
+
+  /**
+   * Hide WebGazer's auto-created video elements visually but keep them functional
+   */
+  _hideWebGazerElements() {
+    // Elements to make invisible but keep processing
+    const elementsToHide = [
+      'webgazerFaceOverlay',
+      'webgazerFaceFeedbackBox',
+      'webgazerGazeDot'
+    ];
+
+    // These need to stay visible for processing, just make them tiny and transparent
+    const videoElements = [
+      'webgazerVideoFeed',
+      'webgazerVideoCanvas',
+      'webgazerVideoContainer'
+    ];
+
+    elementsToHide.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = 'none';
+        Utils.log(`Hidden WebGazer element: ${id}`);
+      }
+    });
+
+    // Make video elements tiny but still visible to the browser
+    videoElements.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.position = 'fixed';
+        el.style.width = '1px';
+        el.style.height = '1px';
+        el.style.top = '0';
+        el.style.left = '0';
+        el.style.opacity = '0.01'; // Nearly invisible but still rendered
+        el.style.pointerEvents = 'none';
+        el.style.zIndex = '-1';
+        Utils.log(`Minimized WebGazer video element: ${id}`);
+      }
+    });
+
+    // Also handle any unidentified video elements from WebGazer
+    const allVideos = document.querySelectorAll('video');
+    allVideos.forEach(video => {
+      if (video.id !== 'webcam-preview' && !video.id.startsWith('webgazer')) {
+        video.style.position = 'fixed';
+        video.style.width = '1px';
+        video.style.height = '1px';
+        video.style.opacity = '0.01';
+        video.style.pointerEvents = 'none';
+        video.style.zIndex = '-1';
+        Utils.log('Minimized additional video element');
+      }
+    });
+  },
+
   /**
    * Monitor face detection status
    */
   _setupFaceDetection() {
-    setInterval(() => {
-      const prediction = webgazer.getCurrentPrediction();
-      this.faceDetected = prediction !== null;
+    setInterval(async () => {
+      const prediction = await webgazer.getCurrentPrediction();
+      const wasDetected = this.faceDetected;
+      this.faceDetected = prediction !== null && prediction.x !== undefined;
+
+      // Track detection history for stability check
+      this.faceDetectionHistory.push(this.faceDetected);
+      if (this.faceDetectionHistory.length > this.faceDetectionHistorySize) {
+        this.faceDetectionHistory.shift();
+      }
 
       // Update UI indicator
       const indicator = document.getElementById('face-indicator');
@@ -79,26 +149,28 @@ const GazeTracker = {
           indicator.classList.remove('active');
         }
       }
+
+      // Notify listeners of state change
+      if (wasDetected !== this.faceDetected && this.onFaceStatusChange) {
+        this.onFaceStatusChange(this.faceDetected);
+      }
     }, 100);
   },
 
   /**
-   * Start calibration phase - collecting gaze points from left and right sides
+   * Check if face has been consistently detected
+   * Returns true if face was detected in at least 80% of recent checks
    */
-  startCalibration(side) {
-    Utils.log(`Starting calibration for ${side} side`);
-
-    this.leftGazePoints = [];
-    this.rightGazePoints = [];
-    this.isCalibrating = true;
-    this.calibrationSide = side;
-
-    // Clear any existing gaze listener
-    this.gazeCallback = null;
+  isFaceStablyDetected() {
+    if (this.faceDetectionHistory.length < this.faceDetectionHistorySize) {
+      return false; // Not enough history yet
+    }
+    const detectedCount = this.faceDetectionHistory.filter(d => d).length;
+    return detectedCount >= this.faceDetectionHistorySize * 0.8;
   },
 
   /**
-   * Collect calibration data point
+   * Handle incoming gaze data from WebGazer
    */
   _handleGazeData(data, clock) {
     if (!this.isInitialized) return;
@@ -108,15 +180,6 @@ const GazeTracker = {
       y: data.y,
       timestamp: clock
     };
-
-    // During calibration
-    if (this.isCalibrating) {
-      if (this.calibrationSide === 'left') {
-        this.leftGazePoints.push(gazePoint);
-      } else if (this.calibrationSide === 'right') {
-        this.rightGazePoints.push(gazePoint);
-      }
-    }
 
     // During trials - apply smoothing and call callback
     if (this.gazeCallback) {
@@ -142,39 +205,6 @@ const GazeTracker = {
 
         this.gazeCallback(smoothedGaze);
       }
-    }
-  },
-
-  /**
-   * Stop calibration and calculate threshold
-   */
-  stopCalibration() {
-    Utils.log('Stopping calibration');
-    Utils.log(`Collected ${this.leftGazePoints.length} left points, ${this.rightGazePoints.length} right points`);
-
-    this.isCalibrating = false;
-    this.calibrationSide = null;
-
-    // Calculate threshold (midpoint between mean left X and mean right X)
-    if (this.leftGazePoints.length > 0 && this.rightGazePoints.length > 0) {
-      const leftMeanX = Utils.mean(this.leftGazePoints.map(p => p.x));
-      const rightMeanX = Utils.mean(this.rightGazePoints.map(p => p.x));
-
-      this.gazeThreshold = (leftMeanX + rightMeanX) / 2;
-
-      Utils.log(`Calibration threshold: ${this.gazeThreshold}`);
-      Utils.log(`Left mean X: ${leftMeanX}, Right mean X: ${rightMeanX}`);
-
-      this.isCalibrated = true;
-      return {
-        threshold: this.gazeThreshold,
-        leftMeanX,
-        rightMeanX,
-        leftPoints: this.leftGazePoints.length,
-        rightPoints: this.rightGazePoints.length
-      };
-    } else {
-      throw new Error('Insufficient calibration data collected');
     }
   },
 
@@ -234,8 +264,8 @@ const GazeTracker = {
       Math.pow(window.innerHeight, 2)
     );
 
-    // Normalize to 0-1 scale (1 = perfect, 0 = worst)
-    this.calibrationAccuracy = Math.max(0, 1 - (avgDistance / (screenDiagonal * 0.3)));
+    // Normalize to 0-1 scale (1 = perfect, 0 = worst), clamped to [0, 1]
+    this.calibrationAccuracy = Math.min(1, Math.max(0, 1 - (avgDistance / (screenDiagonal * 0.3))));
 
     Utils.log(`Validation accuracy: ${(this.calibrationAccuracy * 100).toFixed(1)}%`);
 
@@ -290,13 +320,6 @@ const GazeTracker = {
   },
 
   /**
-   * Store gaze point during tracking
-   */
-  recordGazePoint(gazePoint) {
-    this.currentGazeData.push(gazePoint);
-  },
-
-  /**
    * Pause WebGazer (for breaks)
    */
   pause() {
@@ -329,13 +352,13 @@ const GazeTracker = {
   },
 
   /**
-   * Get current gaze prediction (synchronous)
+   * Get current gaze prediction (async)
    */
-  getCurrentGaze() {
+  async getCurrentGaze() {
     if (!this.isInitialized) return null;
 
-    const prediction = webgazer.getCurrentPrediction();
-    if (!prediction) return null;
+    const prediction = await webgazer.getCurrentPrediction();
+    if (!prediction || prediction.x === undefined) return null;
 
     return {
       x: prediction.x,
@@ -387,6 +410,9 @@ const GazeTracker = {
       previousSide = currentSide;
     }
 
+    // Guard against division by zero
+    const totalTime = leftFixationTime + rightFixationTime + centerTime;
+
     return {
       leftFixationTime,
       rightFixationTime,
@@ -394,8 +420,8 @@ const GazeTracker = {
       switches,
       firstFixation,
       totalSamples: gazeData.length,
-      leftPercentage: leftFixationTime / (leftFixationTime + rightFixationTime + centerTime) * 100,
-      rightPercentage: rightFixationTime / (leftFixationTime + rightFixationTime + centerTime) * 100
+      leftPercentage: totalTime > 0 ? (leftFixationTime / totalTime) * 100 : 0,
+      rightPercentage: totalTime > 0 ? (rightFixationTime / totalTime) * 100 : 0
     };
   },
 
@@ -406,12 +432,7 @@ const GazeTracker = {
     return {
       threshold: this.gazeThreshold,
       accuracy: this.calibrationAccuracy,
-      leftPoints: this.leftGazePoints.length,
-      rightPoints: this.rightGazePoints.length,
-      leftMeanX: this.leftGazePoints.length > 0 ?
-        Utils.mean(this.leftGazePoints.map(p => p.x)) : null,
-      rightMeanX: this.rightGazePoints.length > 0 ?
-        Utils.mean(this.rightGazePoints.map(p => p.x)) : null
+      calibrationType: 'click-based'
     };
   }
 };

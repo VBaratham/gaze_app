@@ -166,11 +166,51 @@ video {
     display: none !important;
 }
 
-/* Hide all video feeds throughout the experiment */
-.webcam-mini,
-#webcam-preview,
-#webcam-calibration,
-video {
+/* Hide WebGazer overlay elements */
+#webgazerFaceOverlay,
+#webgazerFaceFeedbackBox,
+#webgazerGazeDot {
+    display: none !important;
+}
+
+/* Keep WebGazer video elements functional but nearly invisible */
+#webgazerVideoFeed,
+#webgazerVideoCanvas,
+#webgazerVideoContainer {
+    position: fixed !important;
+    width: 1px !important;
+    height: 1px !important;
+    top: 0 !important;
+    left: 0 !important;
+    opacity: 0.01 !important;
+    pointer-events: none !important;
+    z-index: -1 !important;
+}
+
+/* Camera screen - show our video preview */
+#camera-screen .video-container {
+    display: block !important;
+    position: relative;
+    width: 100%;
+    max-width: 640px;
+    margin: 20px auto;
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    min-height: 480px;
+}
+
+#camera-screen #webcam-preview {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    height: auto !important;
+    position: static !important;
+    left: auto !important;
+}
+
+/* Hide webcam preview on all other screens */
+.webcam-mini {
     display: none !important;
     visibility: hidden !important;
 }
